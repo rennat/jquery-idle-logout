@@ -8,10 +8,16 @@
 	<script src="https://cdn.jsdelivr.net/jquery.cookie/0.1/jquery.cookie.js"></script>
 	<script src="jquery.ui.idle-logout.js"></script>
 	<script>
-		$.idleLogout({
-			idleMilliseconds: 6 * 1000,
-			countdownSeconds: 5,
-			logoutUrl: '/demo-logout.html'
+		$(function () {
+			$.idleLogout({
+				idleSeconds: 15,
+				countdownSeconds: 10,
+				logoutUrl: '/demo-logout.html'
+			});
+			$(document).
+				bind('idleLogout.countdownStart idleLogout.countdownStart', function (e) {
+						console.log(e);
+					});
 		});
 	</script>
 </head>

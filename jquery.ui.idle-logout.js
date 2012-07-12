@@ -10,12 +10,11 @@
 
 (function ($) {
   var 
-
     // plugin defaults
     // any of these can be overridden in initialization
     defaults = {
-      // milliseconds of idle time before logout
-      idleMilliseconds: 20 * 60 * 1000,
+      // seconds of idle time before logout
+      idleSeconds: 20 * 60,
       // countdown length in seconds
       countdownSeconds: 30,
       // message used in countdown popup
@@ -23,212 +22,172 @@
       countdownMessage: "You will be logged out due to inactivity in {countdown} seconds.",
       // redirect to this url after timeout
       logoutUrl: '/logout',
-      // load this url in the background to keep server session alive
-      // if this is false then it will not be loaded
-      //keepAliveUrl: false,
       // domain where cookie is valid
       cookieDomain: window.location.hostname,
       // update time in milliseconds
       updateMilliseconds: 100,
       // listen to these events
-      bindEvents: "mousemove mousedown mouseup keydown keyup focus blur",
-      // start after init
-      autostart: true
+      bindEvents: "mousemove mousedown mouseup keydown keyup focus blur"
     },
 
     // private variables
-    data,
+    settings,
+    lastActivityTime,
+    logoutTimeoutPointer,
+    logoutTime,
+    countdownTime,
+    countdownTimeoutPointer,
+    countdownIntervalPointer,
+    $countdownDialog,
 
-    // static methods
-    doHandleActivity = function (e) {
-      console.debug('doHandleActivity', arguments);
-      $.idleLogout('handleActivity', e);
-    },
-    doUpdate = function () {
-      $.idleLogout('update');
-    },
-    setCookie = function (t) {
-      $.cookie('idleLogout-lastActivityTime', t);
-    },
-    getCookie = function (t) {
-      return $.cookie('idleLogout-lastActivityTime');
-    },
-    doLogout = function () {
-      $.idleLogout('logout');
-    },
-    doStartCountdown = function () {
-      $.idleLogout('startCountdown');
-    },
-    doCancelCountdown = function () {
-      $.idleLogout('cancelCountdown');
+    // private methods
+
+    // trigger idleLogout event
+    triggerLogout = function () {
+      $(document).trigger('idleLogout.logout');
     },
 
-    // plugin methods
-    methods = {
+    // trigger idleCountdownStart event
+    triggerCountdownStart = function () {
+      $(document).trigger('idleLogout.countdownStart');
+    },
 
-      // init
-      // `$.idleLogout({...});`
-      init: function (options) {
+    // clear timers
+    clearTimers = function () {
+      if (logoutTimeoutPointer) {
+        window.clearTimeout(logoutTimeoutPointer);
+      }
+      if (countdownTimeoutPointer) {
+        window.clearTimeout(countdownTimeoutPointer);
+      }
+    },
+
+    // update timers
+    updateTimersFromTimestamp = function (timestamp) {
+      var
+        now = new Date().getTime(),
+        logoutDelay,
+        countdownDelay;
+      clearTimers();
+      logoutTime = timestamp + settings.idleSeconds * 1000;
+      countdownTime = logoutTime - settings.countdownSeconds * 1000;
+      logoutDelay = (logoutTime - now);
+      countdownDelay = (countdownTime - now);
+      logoutTimeoutPointer = window.setTimeout(triggerLogout, logoutDelay);
+      countdownTimeoutPointer = window.setTimeout(triggerCountdownStart, countdownDelay);
+    },
+
+    // countdown interval
+    countdownUpdate = function ($timer) {
+      var
+        now = new Date().getTime(),
+        secondsRemaining = Math.ceil((logoutTime - now) / 1000.0);
+        cookieTime = parseInt($.cookie('lastActivityTime'));
+      if (cookieTime > lastActivityTime) {
+        lastActivityTime = cookieTime;
+        updateTimersFromTimestamp(lastActivityTime);
+        $countdownDialog.dialog('close');
+      } else {
+        $timer.text(secondsRemaining);
+      }
+    },
+    
+    // start counting down
+    beginCountdown = function ($timer) {
+      var
+        cookieTime = parseInt($.cookie('lastActivityTime'));
+      if (cookieTime > lastActivityTime) {
+        updateTimersFromTimestamp(cookieTime);
+      } else {
+        countdownUpdate($timer);
+        countdownIntervalPointer = window.setInterval(function () {
+          countdownUpdate($timer);
+        }, 1000);
+      }
+    },
+
+    // stop counting down
+    cancelCountdown = function () {
+      updateTimersFromTimestamp(new Date().getTime());
+    },
+
+    // prepare the countdown dialog
+    makeDialog = function () {
         var
-          settings = $.extend(defaults, options),
           message = settings.countdownMessage.replace('{countdown}', '<span class="countdown-timer"></span>'),
-          $dialog,
           $timer;
-        $dialog = $('<div>'+message+'</div>');
-        $timer = $dialog.find('.countdown-timer');
-        $dialog.dialog({
+        $countdownDialog = $('<div>'+message+'</div>');
+        $timer = $countdownDialog.find('.countdown-timer');
+        $countdownDialog.dialog({
           resizable: false,
           autoOpen: false,
           modal: true,
           buttons: {
             "Cancel Logout": function () {
-              $.idleLogout('cancelCountdown');
+              $countdownDialog.dialog('close');
             }
           },
+          open: function () {
+            beginCountdown($timer);
+          },
           close: function () {
-            $.idleLogout('cancelCountdown');
+            cancelCountdown();
           }
         });
-        data = {
-          settings: settings,
-          updateTimeoutPointer: null,
-          logoutTimeoutPointer: null,
-          logoutTime: null,
-          countdownTimeoutPointer: null,
-          countdownIntervalPointer: null,
-          $countdownDialog: $dialog,
-          $countdownTimer: $timer,
-          lastActivityTime: new Date().getTime(),
-        };
-        if (data.settings.autostart) {
-          $.idleLogout('enable');
-        }
-        // maintain chainability
-        return this;
-      },
+    },
 
-      // enable
-      // `$.idleLogout('enable');`
-      enable: function () {
-        var
-          settings = data.settings,
-          countdownMilliseconds = settings.idleMilliseconds - settings.countdownSeconds * 1000;
-        // bind events
-        $(document).bind(settings.bindEvents, doHandleActivity);
-        // schedule update timeout
-        data.updateTimeoutPointer = window.setTimeout(doUpdate, settings.updateMilliseconds);
-        // schedule countdown timeout
-        data.logoutCountdownPointer = window.setTimeout(doStartCountdown, countdownMilliseconds);
-        // set logout time
-        data.logoutTime = data.lastActivityTime + settings.idleMilliseconds / 1000;
-        // schedule logout timeout
-        data.logoutTimeoutPointer = window.setTimeout(doLogout, settings.idleMilliseconds);
-        // maintain chainability
-        return this;
-      },
+    // logout event handler
+    logoutHandler = function () {
+      window.location.href = settings.logoutUrl;
+    },
 
-      // disable
-      // `$.idleLogout('disable');`
-      disable: function () {
-        var
-          settings = data.settings;
-        // unbind events
-        $(document).unbind(settings.bindEvents, doHandleActivity);
-        // cancel update timeout
-        window.clearTimeout(data.updateTimeoutPointer);
-        // cancel countdown timeout
-        window.clearTimeout(data.logoutCountdownPointer);
-        // clear logout time
-        data.logoutTime = null;
-        // cancel logout timeout
-        window.clearTimeout(data.logoutTimeoutPointer);
-        // maintain chainability
-        return this;
-      },
-
-      // handleActivity
-      // usage: `$.idleLogout('handleActivity');`
-      // usage: `$.idleLogout('handleActivity', e);`
-      // updates last activity time to the given event's timestamp or the current time
-      handleActivity: function (e) {
-        var
-          settings = data.settings,
-          timestamp = e && e.timestamp || new Date().getTime();
-        data.lastActivityTime = timestamp;
-        $.idleLogout('resetFromTime', data.lastActivityTime);
-        // maintain chainability
-        return this;
-      },
-
-      // update
-      // usage: `$.idleLogout('update');`
-      // syncs local data with cookie
-      update: function () {
-        var
-          settings = data.settings,
-          cookieTime = getCookie(),
-          idleTime;
-        // sync with cookie
-        if (data.lastActivityTime > cookieTime) {
-          // update cookie from local
-          setCookie(data.lastActivityTime);
-        } else if (data.lastActivityTime < cookieTime) {
-          // update local from cookie
-          data.lastActivityTime = getCookie();
-          $.idleLogout('resetFromTime', data.lastActivityTime);
-        }
-        // check for logout
-        idleTime = new Date().getTime() - data.lastActivityTime * 1000;
-        if (idleTime > settings.idleMilliseconds) {
-          console.log('logout');
-        }
-        // schedule update timeout
-        data.updateTimeoutPointer = window.setTimeout(doUpdate, settings.updateMilliseconds);
-        // maintain chainability
-        return this;
-      },
-
-      // resetFromTime
-      // usage: `$.idleLogout('resetFromTime', timestamp);`
-      resetFromTime: function (timestamp) {
-        var
-          settings = data.settings,
-          delay = settings.idleMilliseconds - (new Date().getTime() - timestamp) * 1000;
-        // cancel logout timeout
-        window.clearTimeout(data.logoutTimeoutPointer);
-        // set logout time
-        data.logoutTime = new Date().getTime() * 1000 + delay;
-        // schedule logout timeout
-        data.logoutTimeoutPointer = window.setTimeout(doLogout, delay);
-      },
-
-      // logout
-      // usage: `$.idleLogout('logout');`
-      logout: function () {
-        window.location.href = data.settings.logoutUrl;
-      },
-
-      // startCountdown
-      // usage: `$.idleLogout('startCountdown');`
-      startCountdown: function () {
-        var
-          $timer;
-        data.$countdownDialog.dialog('open');
-        $timer = data.$countdownDialog.dialog('widget').find('.countdown-timer');
-        if ($timer.length) {
-          data.countdownIntervalPointer = window.setInterval(function () {
-            if (data.logoutTime) {
-              $timer.text(Math.max(0, data.logoutTime - new Date().getTime()));
-            }
-          }, 1000);
-        }
-      },
-
-      // cancelCountdown
-      cancelCountdown: function () {
-        data.$countdownDialog.dialog('close');
-        window.clearInterval(data.countdownIntervalPointer);
+    // udpate the last activity time
+    // sets cookie
+    activityHandler = function () {
+      var
+        cookieTime = parseInt($.cookie('lastActivityTime'));
+      lastActivityTime = new Date().getTime();
+      if (!cookieTime || cookieTime < lastActivityTime) {
+        $.cookie('lastActivityTime', lastActivityTime);
       }
+      if (!$countdownDialog.dialog('isOpen')) {
+        updateTimersFromTimestamp(lastActivityTime);
+      }
+    },
+
+    // countdown event handler
+    countdownHandler = function () {
+      var
+        cookieTime = parseInt($.cookie('lastActivityTime'));
+      if (cookieTime > lastActivityTime) {
+        updateTimersFromTimestamp(cookieTime);
+      } else {
+        $countdownDialog.dialog('open');
+      }
+    },
+
+    // plugin methods
+    methods = {
+      // init
+      // `$.idleLogout({...});`
+      init: function (options) {
+        settings = $.extend(defaults, options);
+        lastActivityTime = new Date().getTime();
+        // make dialog
+        makeDialog();
+        // begin timers
+        updateTimersFromTimestamp(lastActivityTime);
+        // bind events
+        $(document).
+          bind({
+            'idleLogout.logout': logoutHandler,
+            'idleLogout.countdownStart': countdownHandler
+          }).
+          bind(settings.bindEvents, activityHandler);
+        activityHandler();
+        // maintain chainability
+        return this;
+      },
     };
 
   // register jQuery plugin
@@ -241,4 +200,5 @@
       $.error('Method ' +  method + ' does not exist on jQuery.idleLogout');
     }
   };
+
 }(jQuery));
