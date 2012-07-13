@@ -10,13 +10,13 @@
 	<script>
 		$(function () {
 			$.idleLogout({
-				idleSeconds: 15,
-				countdownSeconds: 10,
+				idleSeconds: 35,
+				countdownSeconds: 30,
 				logoutUrl: '/demo-logout.html'
 			});
 			$(document).
 				bind('idleLogout.countdownStart idleLogout.countdownStart', function (e) {
-						console.log(e);
+						console.log(e.type, e.namespace, e);
 					});
 		});
 	</script>

@@ -71,10 +71,11 @@
       clearTimers();
       logoutTime = timestamp + settings.idleSeconds * 1000;
       countdownTime = logoutTime - settings.countdownSeconds * 1000;
-      logoutDelay = (logoutTime - now);
-      countdownDelay = (countdownTime - now);
+      logoutDelay = Math.max(0, (logoutTime - now));
+      countdownDelay = Math.max(0, (countdownTime - now));
       logoutTimeoutPointer = window.setTimeout(triggerLogout, logoutDelay);
       countdownTimeoutPointer = window.setTimeout(triggerCountdownStart, countdownDelay);
+      console.log('logout', logoutDelay, 'countdown', countdownDelay);
     },
 
     // countdown interval
@@ -97,18 +98,20 @@
       var
         cookieTime = parseInt($.cookie('lastActivityTime'));
       if (cookieTime > lastActivityTime) {
+        lastActivityTime = cookieTime;
         updateTimersFromTimestamp(cookieTime);
       } else {
         countdownUpdate($timer);
         countdownIntervalPointer = window.setInterval(function () {
           countdownUpdate($timer);
-        }, 1000);
+        }, 100);
       }
     },
 
     // stop counting down
     cancelCountdown = function () {
-      updateTimersFromTimestamp(new Date().getTime());
+      activityHandler();
+      updateTimersFromTimestamp(lastActivityTime);
     },
 
     // prepare the countdown dialog
@@ -147,10 +150,10 @@
       var
         cookieTime = parseInt($.cookie('lastActivityTime'));
       lastActivityTime = new Date().getTime();
-      if (!cookieTime || cookieTime < lastActivityTime) {
-        $.cookie('lastActivityTime', lastActivityTime);
-      }
       if (!$countdownDialog.dialog('isOpen')) {
+        if (!cookieTime || cookieTime < lastActivityTime) {
+          $.cookie('lastActivityTime', lastActivityTime);
+        }
         updateTimersFromTimestamp(lastActivityTime);
       }
     },
