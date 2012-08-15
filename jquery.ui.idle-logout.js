@@ -75,7 +75,6 @@
       countdownDelay = Math.max(0, (countdownTime - now));
       logoutTimeoutPointer = window.setTimeout(triggerLogout, logoutDelay);
       countdownTimeoutPointer = window.setTimeout(triggerCountdownStart, countdownDelay);
-      console.log('logout', logoutDelay, 'countdown', countdownDelay);
     },
 
     // countdown interval
@@ -84,7 +83,6 @@
         now = new Date().getTime(),
         secondsRemaining = Math.ceil((logoutTime - now) / 1000.0);
         cookieTime = parseInt($.cookie('lastActivityTime'));
-      console.log(cookieTime, lastActivityTime, cookieTime - lastActivityTime);
       if (cookieTime > lastActivityTime) {
         lastActivityTime = cookieTime;
         updateTimersFromTimestamp(lastActivityTime);
