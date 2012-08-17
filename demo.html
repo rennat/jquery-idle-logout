@@ -10,12 +10,12 @@
 	<script>
 		$(function () {
 			$.idleLogout({
-				idleSeconds: 35,
-				countdownSeconds: 30,
+				logoutSeconds: 30,
+				countdownSeconds: 25,
 				logoutUrl: '/demo-logout.html'
 			});
 			$(document).
-				bind('idleLogout.countdownStart idleLogout.countdownStart', function (e) {
+				bind('UserActivity.idleLogout UserIdle.idleLogout IdleLogout.idleLogout CancelLogut.idleLogout IdleDialogUpdate.idleLogout', function (e) {
 						console.log(e.type, e.namespace, e);
 					});
 		});
