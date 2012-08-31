@@ -30,7 +30,7 @@
         path: '/'
       },
       // update time in milliseconds
-      updateMilliseconds: 100,
+      updateMilliseconds: 300,
       // listen to these events
       bindEvents: "mousemove mousedown mouseup keydown keyup focus blur"
     },
@@ -74,8 +74,9 @@
       "CancelLogout": function (e) {
         IDLE._stopCountdown();
         // trigger activity
-        $(document).trigger('UserActivity.idleLogout', e);
+        IDLE._reset();
       },
+      // update the countdown and check for cancellation in other tabs
       "IdleDialogUpdate": function (e) {
         // check the cookie
         if (IDLE._inSyncWithCookie()) {
@@ -138,11 +139,11 @@
         // update the cookie
         IDLE._setCookie(logoutTime);
       }
-      console.log(logoutDelay, idleDelay);
     },
     // consistently set the cookie
     _setCookie: function (value) {
-      $.cookie('idleLogout.logoutTime', IDLE.logoutTime, IDLE.settings.cookieOptions);
+      console.log("set cookie", value);
+      $.cookie('idleLogout.logoutTime', value, IDLE.settings.cookieOptions);
     },
     // consistently get the cookie
     _getCookie: function () {
@@ -186,8 +187,12 @@
       }, IDLE.settings.updateMilliseconds);
     },
     _stopCountdown: function () {
-      window.clearInterval(IDLE.countdownInterval);
-      IDLE.$countdownDialog.dialog('close');
+      if (IDLE.countdownInterval) {
+        window.clearInterval(IDLE.countdownInterval);
+      }
+      if (IDLE.$countdownDialog.dialog('isOpen')) {
+        IDLE.$countdownDialog.dialog('close');
+      }
       IDLE.countingDown = false;
     },
     _updateCountdown: function () {
