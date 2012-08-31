@@ -1,4 +1,4 @@
-jQuery idleLogout plugin v-0.0
+jQuery idleLogout plugin v-0.1
 ==============================
 
 Idle logout maintaining one session across multiple tabs/windows.
